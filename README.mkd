@@ -1,0 +1,71 @@
+Amanda LVM-snapshot Plugin
+==========================
+
+This plugin provides support for LVM snapshots in Amanda dumps.  It interfaces
+with Amanda through the [Script API][1].
+
+Install
+-------
+
+Sorry, there's no Makefile yet. Simply copy the amlvm-snapshot.pl script into
+Amanda's application directory.
+
+For example:
+
+    cp amlvm-snapshot.pl /usr/libexec/amanda/application/amlvm-snapshot
+
+You may need to edit the location of Amanda's Perl libraries in the script
+itself, the follow line.
+
+    use lib '/usr/local/share/perl/5.8.4';
+
+Configure Amanda
+----------------
+
+Somewhere in your Amanda config you must define a `script-tool` that loads the
+plugin. You can simply include the provided `lvm-snapshot.conf` file if you like.
+
+    cp lvm-snapshot.conf /etc/amanda/DailySet1/lvm-snapshot.conf
+    echo 'includefile "lvm-snapshot.conf"' >> /etc/amanda/DailySet1/amanda.conf
+
+Once you have the `lvm-snapshot` `script-tool` defined, you can include it in
+a `dumptype` definition.
+
+    define dumptype lvm-comp-root-tar {
+      comp-root-tar
+      script "lvm-snapshot"
+    }
+
+Configure Permissions
+---------------------
+
+This plugin requires elevated permissions in order to create and remove LVM
+devices. There are two ways to provide access: setting setuid on the plugin
+script itself, or by configuring `sudo` to allow execution of the LVM
+programs.
+
+### setuid
+
+For setuid, simply configure the ownership and mode on `amlvm-snapshot`. In
+this example, `disk` is the group that Amanda runs under.
+
+    chown root:disk /usr/libexec/amanda/application/amlvm-snapshot
+    chmod 4750 /usr/libexec/amanda/application/amlvm-snapshot
+
+This will require that you have a version of Perl installed that was compiled
+with `ENABLE_SUIDPERL`.
+
+### sudo
+
+For sudo, add the following to the `/etc/sudoers` file where "amandabackup" is
+the name of your Amanda user.
+
+    amandabackup    ALL=(ALL) NOPASSWD: /sbin/lvcreate, /sbin/lvdisplay, /sbin/lvremove, /sbin/vgdisplay, /bin/readlink
+
+The commands listed are those used by `amlvm-snapshot` to interact with the
+LVM volumes.
+
+Enjoy,
+Daniel
+
+[1]: http://wiki.zmanda.com/index.php/Script_API

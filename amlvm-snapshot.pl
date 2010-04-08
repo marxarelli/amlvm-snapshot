@@ -117,8 +117,8 @@ sub create_snapshot {
 
     # create a new snapshot with lvcreate
     $self->execute(
-        "$self->{lvcreate} --size $self->{snapsize} --snapshot ".
-        "--name amsnapshot $self->{device}"
+        "$self->{lvcreate}", "--size", $self->{snapsize},
+        "--snapshot", "--name", "amsnapshot", $self->{device}
     );
 
     $self->print_to_server("",
@@ -129,7 +129,9 @@ sub create_snapshot {
 
 sub execute {
     my $self = shift;
-    my ($cmd) = @_;
+    my $cmd = shift;
+
+    my @args = map(quotemeta, @_);
 
     my ($in, $out, $err, $pid);
     $err = Symbol::gensym;
@@ -137,6 +139,8 @@ sub execute {
     if ($self->{sudo}) {
         $cmd = "sudo $cmd";
     }
+
+    $cmd .= " @args";
 
     $pid = open3($in, $out, $err, $cmd);
 
@@ -168,7 +172,8 @@ sub remove_snapshot {
 
     # remove snapshot device
     $self->execute(
-        "$self->{lvremove} -f /dev/$self->{volume_group}/amsnapshot"
+        "$self->{lvremove} -f",
+        "/dev/$self->{volume_group}/amsnapshot"
     );
 
     $self->print_to_server("",
@@ -213,7 +218,7 @@ sub resolve_device {
 
         # we don't use perl's readlink here, because it might need to be
         # executed with sudo
-        my $real_device = join("", $self->execute("readlink $device"));
+        my $real_device = join("", $self->execute("readlink", $device));
         chomp($real_device);
 
         if ($real_device eq $mnt_device) {

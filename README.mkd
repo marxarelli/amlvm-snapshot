@@ -46,6 +46,9 @@ programs.
 
 ### setuid
 
+NOTE: I'm currently having trouble getting this to work right, as Amanda's
+Perl libraries don't seem to play nice with setuid scripts.
+
 For setuid, simply configure the ownership and mode on `amlvm-snapshot`. In
 this example, `disk` is the group that Amanda runs under.
 
@@ -64,6 +67,14 @@ the name of your Amanda user.
 
 The commands listed are those used by `amlvm-snapshot` to interact with the
 LVM volumes.
+
+Remember to enable the `SUDO` property. This is already included in the
+example `lvm-snapshot.conf` file.
+
+    define script-tool lvm-snapshot {
+      # ...
+      property "SUDO" "1"
+    }
 
 Enjoy,
 Daniel

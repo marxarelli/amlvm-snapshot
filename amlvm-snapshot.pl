@@ -345,9 +345,6 @@ my $opt_lvremove;
 my $opt_vgdisplay;
 my $opt_sudo;
 
-#print join(" ", @ARGV) . "\n";
-#exit 1;
-
 Getopt::Long::Configure(qw{bundling});
 GetOptions(
     'execute-where=s'   => \$opt_execute_where,

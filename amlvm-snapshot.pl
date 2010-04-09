@@ -73,6 +73,7 @@ sub new {
     $self->{sudo}           = $sudo;
 
     $self->{volume_group}   = undef;
+    $self->{fs_type}        = undef;
 
     return $self;
 }
@@ -111,10 +112,7 @@ sub create_snapshot {
     # calculate default snapshot size
     $self->calculate_snapsize();
 
-    $self->print_to_server("",
-        "A snapshot of size `$self->{snapsize}' will be created.",
-        $Amanda::Script_App::GOOD
-    );
+    debug("A snapshot of size `$self->{snapsize}' will be created.");
 
     # create a new snapshot with lvcreate
     $self->execute(1,
@@ -122,10 +120,7 @@ sub create_snapshot {
         "--snapshot", "--name", "amsnapshot", $self->{device}
     );
 
-    $self->print_to_server("",
-        "Created snapshot of `$self->{device}'.",
-        $Amanda::Script_App::GOOD
-    );
+    debug("Created snapshot of `$self->{device}'.");
 }
 
 sub execute {
@@ -169,47 +164,51 @@ sub execute {
     return @output;
 }
 
+sub get_snap_device {
+    my $self = shift;
+    return "/dev/$self->{volume_group}/amsnapshot";
+}
+
 sub mount_snapshot {
     my $self = shift;
 
+    # mount options
+    my @options = ('ro');
+
+    # special mount options for xfs
+    # XXX should this be left up to the user as an argument?
+    if ($self->{fs_type} eq 'xfs') {
+        push(@options, 'nouuid');
+    }
+
     # create a temporary mount point and mount the snapshot volume
     $self->{directory} = tempdir(CLEANUP => 0);
-    $self->execute(1, "mount", $self->{device}, $self->{directory});
+    $self->execute(1,
+        "mount -o ", join(",", @options),
+        $self->get_snap_device(), $self->{directory}
+    );
 }
 
 sub remove_snapshot {
     my $self = shift;
 
     # remove snapshot device
-    $self->execute(1,
-        "$self->{lvremove} -f",
-        "/dev/$self->{volume_group}/amsnapshot"
-    );
+    $self->execute(1, "$self->{lvremove} -f", $self->get_snap_device());
 
-    $self->print_to_server("",
-        "Removed snapshot of `$self->{device}'.",
-        $Amanda::Script_App::GOOD
-    );
+    debug("Removed snapshot of `$self->{device}'.");
 }
 
 # Returns the device that's mounted at the given directory.
 sub resolve_device {
     my $self = shift;
 
-    my $mnt_device;
+    my $mnt_device = $self->scan_mtab(
+        sub { return $_[0] if ($_[1] eq $self->{disk}); }
+    );
 
-    # look in the system mtab
-    open(MTAB, "/etc/mtab");
-    my $line;
-    while ($line = <MTAB>) {
-        chomp($line);
-        my ($device, $directory) = split(/\s+/, $line);
-
-        if ($directory eq $self->{disk}) {
-            $mnt_device = $device;
-        }
-    }
-    close MTAB;
+    my $fs_type = $self->scan_mtab(
+        sub { return $_[2] if ($_[1] eq $self->{disk}); }
+    );
 
     if (!defined $mnt_device) {
         $self->print_to_server_and_die("",
@@ -234,16 +233,34 @@ sub resolve_device {
         if ($real_device eq $mnt_device) {
             $self->{device} = $device;
             $self->{volume_group} = $group;
+            $self->{fs_type} = $fs_type;
 
-            $self->print_to_server("",
+            debug(
                 "Resolved device `$self->{device}' and volume group ".
-                "`$self->{volume_group}' from mount point `$self->{disk}'.",
-                $Amanda::Script_App::GOOD
+                "`$self->{volume_group}' from mount point `$self->{disk}'."
             );
 
             last;
         }
     }
+}
+
+sub scan_mtab {
+    my $self = shift;
+    my $sub = shift;
+
+    open(MTAB, "/etc/mtab");
+    my $line;
+    my $result;
+    while ($line = <MTAB>) {
+        chomp($line);
+        my ($device, $directory, $type) = split(/\s+/, $line);
+        $result = $sub->($device, $directory, $type);
+        last if ($result);
+    }
+    close MTAB;
+
+    return $result;
 }
 
 sub setup {
@@ -303,7 +320,20 @@ sub setup {
 
 sub umount_snapshot {
     my $self = shift;
-    $self->execute(1, "umount", $self->{directory});
+    my $device = $self->get_snap_device();
+    my $real_device = join("", $self->execute(1, "readlink", $device));
+    chomp($real_device);
+
+    my $mnt = $self->scan_mtab(sub { return $_[1] if ($_[0] eq $real_device); });
+
+    if (!$mnt) {
+        $self->print_to_server_and_die("",
+            "Failed to get mount point for snapshot device `$device'.",
+            $Amanda::Script_App::ERROR
+        );
+    }
+
+    $self->execute(1, "umount", $mnt);
 }
 
 

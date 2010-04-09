@@ -41,6 +41,7 @@ use Amanda::Paths;
 use Amanda::Constants;
 
 use Config;
+use File::Temp qw(tempdir);
 use IPC::Open3;
 use Symbol;
 
@@ -84,7 +85,7 @@ sub calculate_snapsize {
     # if a snapshot size isn't already set, use all available extents in the
     # volume group
     if (!defined $self->{snapsize}) {
-        foreach ($self->execute("$self->{vgdisplay} -c")) {
+        foreach ($self->execute(1, "$self->{vgdisplay} -c")) {
             my @parts = split(/:/);
             my $group = $parts[0];
             my $total = $parts[13];
@@ -116,7 +117,7 @@ sub create_snapshot {
     );
 
     # create a new snapshot with lvcreate
-    $self->execute(
+    $self->execute(1,
         "$self->{lvcreate}", "--size", $self->{snapsize},
         "--snapshot", "--name", "amsnapshot", $self->{device}
     );
@@ -129,6 +130,7 @@ sub create_snapshot {
 
 sub execute {
     my $self = shift;
+    my $sudo = shift;
     my $cmd = shift;
 
     my @args = map(quotemeta, @_);
@@ -136,7 +138,7 @@ sub execute {
     my ($in, $out, $err, $pid);
     $err = Symbol::gensym;
 
-    if ($self->{sudo}) {
+    if ($sudo && $self->{sudo}) {
         $cmd = "sudo $cmd";
     }
 
@@ -167,11 +169,19 @@ sub execute {
     return @output;
 }
 
+sub mount_snapshot {
+    my $self = shift;
+
+    # create a temporary mount point and mount the snapshot volume
+    $self->{directory} = tempdir(CLEANUP => 0);
+    $self->execute(1, "mount", $self->{device}, $self->{directory});
+}
+
 sub remove_snapshot {
     my $self = shift;
 
     # remove snapshot device
-    $self->execute(
+    $self->execute(1,
         "$self->{lvremove} -f",
         "/dev/$self->{volume_group}/amsnapshot"
     );
@@ -210,7 +220,7 @@ sub resolve_device {
     }
 
     # loop through the LVs to find the one that matches
-    foreach ($self->execute("$self->{lvdisplay} -c")) {
+    foreach ($self->execute(1, "$self->{lvdisplay} -c")) {
         my ($device, $group) = split(/:/);
 
         $device =~ s/^\s*//;
@@ -218,7 +228,7 @@ sub resolve_device {
 
         # we don't use perl's readlink here, because it might need to be
         # executed with sudo
-        my $real_device = join("", $self->execute("readlink", $device));
+        my $real_device = join("", $self->execute(1, "readlink", $device));
         chomp($real_device);
 
         if ($real_device eq $mnt_device) {
@@ -291,6 +301,12 @@ sub setup {
     }
 }
 
+sub umount_snapshot {
+    my $self = shift;
+    $self->execute(1, "umount", $self->{directory});
+}
+
+
 sub command_support {
     my $self = shift;
 
@@ -309,12 +325,16 @@ sub command_pre_dle_backup {
 
     $self->setup();
     $self->create_snapshot();
+    $self->mount_snapshot();
+
+    print "PROPERTY directory $self->{directory}\n";
 }
 
 sub command_post_dle_backup {
     my $self = shift;
 
     $self->setup();
+    $self->umount_snapshot();
     $self->remove_snapshot();
 }
 

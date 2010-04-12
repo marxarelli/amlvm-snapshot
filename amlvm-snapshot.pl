@@ -119,8 +119,9 @@ sub create_snapshot {
         "$self->{lvcreate}", "--size", $self->{snapsize},
         "--snapshot", "--name", "amsnapshot", $self->{device}
     );
+    my $snapshot_device = $self->get_snap_device();
 
-    debug("Created snapshot of `$self->{device}'.");
+    debug("Created snapshot of `$self->{device}' at `$snapshot_device'.");
 }
 
 sub execute {
@@ -183,10 +184,13 @@ sub mount_snapshot {
 
     # create a temporary mount point and mount the snapshot volume
     $self->{directory} = tempdir(CLEANUP => 0);
+    my $snapshot_device = $self->get_snap_device();
     $self->execute(1,
         "mount -o ", join(",", @options),
         $self->get_snap_device(), $self->{directory}
     );
+
+    debug("Mounted snapshot `$snapshot_device' at `$self->{directory}'.");
 }
 
 sub remove_snapshot {
@@ -334,6 +338,8 @@ sub umount_snapshot {
     }
 
     $self->execute(1, "umount", $mnt);
+
+    debug("Un-mounted snapshot device `$device' from `$mnt'.");
 }
 
 

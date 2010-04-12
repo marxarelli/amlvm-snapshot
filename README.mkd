@@ -29,11 +29,18 @@ plugin. You can simply include the provided `lvm-snapshot.conf` file if you like
     echo 'includefile "lvm-snapshot.conf"' >> /etc/amanda/DailySet1/amanda.conf
 
 Once you have the `lvm-snapshot` `script-tool` defined, you can include it in
-a `dumptype` definition.
+a `dumptype` definition. Note, however, that your dumptype _must use an
+application-tool program_: Only application-tool programs can handle the
+alternate mount point—of the snapshot device—that the script defines.
 
-    define dumptype lvm-comp-root-tar {
-      comp-root-tar
+    define dumptype lvm-comp-amgtar {
+      comment "LVM snapshot dumped with amgtar"
+      global
+      program "APPLICATION"
+      application "app_amgtar"
       script "lvm-snapshot"
+      compress client fast
+      index
     }
 
 Configure Permissions

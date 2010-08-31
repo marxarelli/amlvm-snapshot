@@ -116,7 +116,7 @@ sub create_snapshot {
 
     # create a new snapshot with lvcreate
     $self->execute(1,
-        "$self->{lvcreate}", "--size", $self->{snapsize},
+        "$self->{lvcreate}", "--extents", $self->{snapsize},
         "--snapshot", "--name", "amsnapshot", $self->{device}
     );
     my $snapshot_device = $self->get_snap_device();

@@ -124,23 +124,27 @@ sub create_snapshot {
     debug("Created snapshot of `$self->{device}' at `$snapshot_device'.");
 }
 
+# Executes (safely) the given command and arguments. Optional execution
+# through sudo can be specified, but will only occur if the script was invoked
+# with the '--sudo' argument.
 sub execute {
     my $self = shift;
     my $sudo = shift;
     my $cmd = shift;
 
+    # escape all given arguments
     my @args = map(quotemeta, @_);
 
-    my ($in, $out, $err, $pid);
+    my ($full_cmd, $in, $out, $err, $pid);
     $err = Symbol::gensym;
 
     if ($sudo && $self->{sudo}) {
-        $cmd = "sudo $cmd";
+        $full_cmd = "sudo $cmd";
     }
 
-    $cmd .= " @args";
+    $full_cmd .= " @args";
 
-    $pid = open3($in, $out, $err, $cmd);
+    $pid = open3($in, $out, $err, $full_cmd);
 
     close($in);
 
@@ -152,12 +156,13 @@ sub execute {
 
     waitpid($pid, 0);
 
-    if ($? > 0) {
+    # NOTE There's an exception for readlink, as it's failure isn't critical.
+    if ($? > 0 and $cmd ne "readlink") {
         my $err_str = join("", @errors);
         chomp($err_str);
 
         $self->print_to_server_and_die("",
-            "Failed to execute (status $?) `$cmd': $err_str",
+            "Failed to execute (status $?) `$full_cmd': $err_str",
             $Amanda::Script_App::ERROR
         );
     }
@@ -165,11 +170,13 @@ sub execute {
     return @output;
 }
 
+# Returns the snapshot device path.
 sub get_snap_device {
     my $self = shift;
     return "/dev/$self->{volume_group}/amsnapshot";
 }
 
+# Mounts the snapshot device at the configured directory.
 sub mount_snapshot {
     my $self = shift;
 
@@ -187,25 +194,40 @@ sub mount_snapshot {
     my $snapshot_device = $self->get_snap_device();
     $self->execute(1,
         "mount -o ", join(",", @options),
-        $self->get_snap_device(), $self->{directory}
+        $snapshot_device, $self->{directory}
     );
 
     debug("Mounted snapshot `$snapshot_device' at `$self->{directory}'.");
 }
 
+# Readlink wrapper.
+sub readlink {
+    my $self = shift;
+    my $path = shift;
+
+    # NOTE: We don't use perl's readlink here, because it might need to be
+    # executed with elevated privileges (sudo).
+    my $real_path = join("", $self->execute(1, "readlink", $path));
+    chomp($real_path);
+
+    return ($real_path ne "") ? $real_path : $path;
+}
+
+# Removes the snapshot device.
 sub remove_snapshot {
     my $self = shift;
 
-    # remove snapshot device
+    # remove snapshot device with 'lvremove'
     $self->execute(1, "$self->{lvremove} -f", $self->get_snap_device());
 
     debug("Removed snapshot of `$self->{device}'.");
 }
 
-# Returns the device that's mounted at the given directory.
+# Resolves the underlying device on which the configured directory resides.
 sub resolve_device {
     my $self = shift;
 
+    # Search mtab for the mount point. Get the device path and filesystem type.
     my $mnt_device = $self->scan_mtab(
         sub { return $_[0] if ($_[1] eq $self->{disk}); }
     );
@@ -216,8 +238,7 @@ sub resolve_device {
 
     if (!defined $mnt_device) {
         $self->print_to_server_and_die("",
-            "Failed to resolve a device from mount point `$self->{disk}'. ".
-            "Is the volume mounted?",
+            "Failed to resolve a device from directory `$self->{disk}'. ",
             $Amanda::Script_App::ERROR
         );
     }
@@ -229,9 +250,7 @@ sub resolve_device {
         $device =~ s/^\s*//;
         chomp($device);
 
-        # we don't use perl's readlink here, because it might need to be
-        # executed with sudo
-        my $real_device = join("", $self->execute(1, "readlink", $device));
+        my $real_device = $self->readlink($device);
         chomp($real_device);
 
         if ($real_device eq $mnt_device) {
@@ -249,6 +268,11 @@ sub resolve_device {
     }
 }
 
+# Iterates over lines in the system mtab and invokes the given anonymous
+# subroutine with entries from each record:
+#  1. Canonical device path (as resolved from readlink).
+#  2. Mount point directory.
+#  3. Filesystem type.
 sub scan_mtab {
     my $self = shift;
     my $sub = shift;
@@ -259,7 +283,7 @@ sub scan_mtab {
     while ($line = <MTAB>) {
         chomp($line);
         my ($device, $directory, $type) = split(/\s+/, $line);
-        $result = $sub->($device, $directory, $type);
+        $result = $sub->($self->readlink($device), $directory, $type);
         last if ($result);
     }
     close MTAB;
@@ -324,11 +348,9 @@ sub setup {
 
 sub umount_snapshot {
     my $self = shift;
-    my $device = $self->get_snap_device();
-    my $real_device = join("", $self->execute(1, "readlink", $device));
-    chomp($real_device);
+    my $device = $self->readlink($self->get_snap_device());
 
-    my $mnt = $self->scan_mtab(sub { return $_[1] if ($_[0] eq $real_device); });
+    my $mnt = $self->scan_mtab(sub { return $_[1] if ($_[0] eq $device); });
 
     if (!$mnt) {
         $self->print_to_server_and_die("",

@@ -135,12 +135,10 @@ sub execute {
     # escape all given arguments
     my @args = map(quotemeta, @_);
 
-    my ($full_cmd, $in, $out, $err, $pid);
+    my ($in, $out, $err, $pid);
     $err = Symbol::gensym;
 
-    if ($sudo && $self->{sudo}) {
-        $full_cmd = "sudo $cmd";
-    }
+    my $full_cmd = ($sudo and $self->{sudo}) ? "sudo $cmd" : $cmd;
 
     $full_cmd .= " @args";
 

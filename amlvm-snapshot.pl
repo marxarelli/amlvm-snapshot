@@ -114,10 +114,14 @@ sub create_snapshot {
 
     debug("A snapshot of size `$self->{snapsize}' will be created.");
 
+    my @parts = split('/', $self->{device});
+    my $vg_name = $parts[2];
+    my $lv_name = $parts[3];
+
     # create a new snapshot with lvcreate
     $self->execute(1,
         "$self->{lvcreate}", "--extents", $self->{snapsize},
-        "--snapshot", "--name", "amsnapshot", $self->{device}
+        "--snapshot", "--name", "amsnap-$vg_name-$lv_name", $self->{device}
     );
     my $snapshot_device = $self->get_snap_device();
 
@@ -171,7 +175,11 @@ sub execute {
 # Returns the snapshot device path.
 sub get_snap_device {
     my $self = shift;
-    return "/dev/$self->{volume_group}/amsnapshot";
+    my @parts = split('/', $self->{device});
+    my $vg_name = $parts[2];
+    my $lv_name = $parts[3];
+
+    return "/dev/$self->{volume_group}/amsnap-$vg_name-$lv_name";
 }
 
 # Mounts the snapshot device at the configured directory.

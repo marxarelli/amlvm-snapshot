@@ -123,7 +123,7 @@ sub create_snapshot {
         "$self->{lvcreate}", "--extents", $self->{snapsize},
         "--snapshot", "--name", "amsnap-$vg_name-$lv_name", $self->{device}
     );
-    my $snapshot_device = $self->get_snap_device();
+    my $snapshot_device = $self->get_snap_device(0);
 
     debug("Created snapshot of `$self->{device}' at `$snapshot_device'.");
 }
@@ -175,11 +175,16 @@ sub execute {
 # Returns the snapshot device path.
 sub get_snap_device {
     my $self = shift;
+    my $mapper = shift;
     my @parts = split('/', $self->{device});
     my $vg_name = $parts[2];
     my $lv_name = $parts[3];
 
-    return "/dev/$self->{volume_group}/amsnap-$vg_name-$lv_name";
+    if ($mapper) {
+        return "/dev/mapper/$self->{volume_group}-amsnap--$vg_name--$lv_name";
+    } else {
+        return "/dev/$self->{volume_group}/amsnap-$vg_name-$lv_name";
+    }
 }
 
 # Mounts the snapshot device at the configured directory.
@@ -197,7 +202,7 @@ sub mount_snapshot {
 
     # create a temporary mount point and mount the snapshot volume
     $self->{directory} = tempdir(CLEANUP => 0);
-    my $snapshot_device = $self->get_snap_device();
+    my $snapshot_device = $self->get_snap_device(0);
     $self->execute(1,
         "mount -o ", join(",", @options),
         $snapshot_device, $self->{directory}
@@ -225,7 +230,7 @@ sub remove_snapshot {
     my $self = shift;
 
     # remove snapshot device with 'lvremove'
-    $self->execute(1, "$self->{lvremove} -f", $self->get_snap_device());
+    $self->execute(1, "$self->{lvremove} -f", $self->get_snap_device(0));
 
     debug("Removed snapshot of `$self->{device}'.");
 }
@@ -355,12 +360,16 @@ sub setup {
 
 sub umount_snapshot {
     my $self = shift;
-    my $device = $self->readlink($self->get_snap_device());
+    my $device = $self->readlink($self->get_snap_device(0));
 
     $device =~ s@\.\.@/dev@;
     debug("umount_snapshot $device");
 
     my $mnt = $self->scan_mtab(sub { return $_[1] if ($_[0] eq $device); });
+    if (!$mnt) {
+        $device = $self->readlink($self->get_snap_device(1));
+        $mnt = $self->scan_mtab(sub { return $_[1] if ($_[0] eq $device); });
+    }
 
     if (!$mnt) {
         $self->print_to_server_and_die(

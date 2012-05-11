@@ -250,10 +250,15 @@ sub resolve_device {
     );
 
     if (!defined $mnt_device) {
-        $self->print_to_server_and_die(
-            "Failed to resolve a device from directory `$self->{disk}'. ",
-            $Amanda::Script_App::ERROR
-        );
+        if ($self->{disk} eq $self->{device}) {
+            $self->print_to_server_and_die(
+                "Failed to resolve a device from directory `$self->{disk}'. ",
+                $Amanda::Script_App::ERROR
+            );
+        } else {
+            $mnt_device = $self->{device};
+            $fs_type = $self->execute(1, "/sbin/blkid -s TYPE -o value $self->{device}");
+        }
     }
 
     # loop through the LVs to find the one that matches

@@ -49,7 +49,7 @@ sub new {
     my $class = shift;
     my ($execute_where, $config, $host, $disk, $device, $level, $index,
         $message, $collection, $record, $snapsize, $lvcreate, $lvdisplay,
-        $lvremove, $vgdisplay, $sudo) = @_;
+        $lvremove, $vgdisplay, $blkid, $sudo) = @_;
     my $self = $class->SUPER::new($execute_where, $config);
 
     $self->{execute_where}  = $execute_where;
@@ -69,6 +69,7 @@ sub new {
     $self->{lvdisplay}      = $lvdisplay;
     $self->{lvremove}       = $lvremove;
     $self->{vgdisplay}      = $vgdisplay;
+    $self->{blkid}          = $blkid;
 
     $self->{sudo}           = $sudo;
 
@@ -347,6 +348,14 @@ sub setup {
         ) if $?;
     }
 
+    if (!defined $self->{blkid}) {
+        chomp($self->{blkid} = `which blkid`);
+        $self->print_to_server_and_die(
+            "blkid wasn't found.",
+            $Amanda::Script_App::ERROR
+        ) if $?;
+    }
+
     # resolve actual lvm device
     $self->resolve_device();
 
@@ -439,7 +448,7 @@ package main;
 
 sub usage {
     print <<EOF;
-Usage: amlvm-snapshot <command> --execute-where=client --config=<config> --host=<host> --disk=<disk> --device=<device> --level=<level> --index=<yes|no> --message=<text> --collection=<no> --record=<yes|no> --snapshot-size=<lvm snapshot size> --lvcreate-path=<path> --lvdisplay-path=<path> --lvremove-path=<path> --vgdisplay-path=<path> --sudo=<0|1>.
+Usage: amlvm-snapshot <command> --execute-where=client --config=<config> --host=<host> --disk=<disk> --device=<device> --level=<level> --index=<yes|no> --message=<text> --collection=<no> --record=<yes|no> --snapshot-size=<lvm snapshot size> --lvcreate-path=<path> --lvdisplay-path=<path> --lvremove-path=<path> --vgdisplay-path=<path> --blkid-path=<path> --sudo=<0|1>.
 EOF
     exit(1);
 }
@@ -460,6 +469,7 @@ my $opt_lvcreate;
 my $opt_lvdisplay;
 my $opt_lvremove;
 my $opt_vgdisplay;
+my $opt_blkid;
 my $opt_sudo;
 
 Getopt::Long::Configure(qw{bundling});
@@ -479,6 +489,7 @@ GetOptions(
     'lvdisplay-path=s'  => \$opt_lvdisplay,
     'lvremove-path=s'   => \$opt_lvremove,
     'vgdisplay-path=s'  => \$opt_vgdisplay,
+    'blkid=s'           => \$opt_blkid,
     'sudo=s'            => \$opt_sudo,
 ) or usage();
 
@@ -488,7 +499,7 @@ $ENV{'PATH'} = "/sbin:/usr/sbin:$ENV{'PATH'}:/usr/local/sbin";
 my $script = Amanda::Script::Amlvm_snapshot->new($opt_execute_where,
     $opt_config, $opt_host, $opt_disk, $opt_device, \@opt_level, $opt_index,
     $opt_message, $opt_collection, $opt_record, $opt_snapsize, $opt_lvcreate,
-    $opt_lvdisplay, $opt_lvremove, $opt_vgdisplay, $opt_sudo);
+    $opt_lvdisplay, $opt_lvremove, $opt_vgdisplay, $opt_blkid, $opt_sudo);
 $script->do($ARGV[0]);
 
 # vim: set et sts=4 sw=4 :

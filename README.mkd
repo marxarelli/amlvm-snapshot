@@ -79,7 +79,7 @@ with `ENABLE_SUIDPERL`.
 For sudo, add the following to the `/etc/sudoers` file where "amandabackup" is
 the name of your Amanda user.
 
-    amandabackup    ALL=(ALL) NOPASSWD: /sbin/lvcreate, /sbin/lvdisplay, /sbin/lvremove, /sbin/vgdisplay, /bin/readlink, /bin/mount, /bin/umount
+    amandabackup    ALL=(ALL) NOPASSWD: /sbin/lvcreate, /sbin/lvdisplay, /sbin/lvremove, /sbin/vgdisplay, /bin/readlink, /bin/mount, /bin/umount, /sbin/blkid
 
 The commands listed are those used by `amlvm-snapshot` to interact with the
 LVM volumes.

@@ -207,6 +207,7 @@ sub readlink {
     # executed with elevated privileges (sudo).
     my $real_path = join("", $self->execute(1, "readlink", $path));
     chomp($real_path);
+    $real_path =~ s@\.\.@/dev@;
 
     return ($real_path ne "") ? $real_path : $path;
 }
@@ -348,6 +349,9 @@ sub umount_snapshot {
     my $self = shift;
     my $device = $self->readlink($self->get_snap_device());
 
+    $device =~ s@\.\.@/dev@;
+    debug("umount_snapshot $device");
+
     my $mnt = $self->scan_mtab(sub { return $_[1] if ($_[0] eq $device); });
 
     if (!$mnt) {
@@ -360,6 +364,8 @@ sub umount_snapshot {
     $self->execute(1, "umount", $mnt);
 
     debug("Un-mounted snapshot device `$device' from `$mnt'.");
+    rmdir $mnt;
+    debug("Remove snapshot mount point rmdir `$mnt'.");
 }
 
 

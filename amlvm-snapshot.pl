@@ -257,7 +257,8 @@ sub resolve_device {
             );
         } else {
             $mnt_device = $self->{device};
-            $fs_type = $self->execute(1, "/sbin/blkid -s TYPE -o value $self->{device}");
+            $fs_type = join("", $self->execute(1, "$self->{blkid} -s TYPE -o value $self->{device}"));
+            chomp($fs_type);
         }
     }
 

@@ -408,6 +408,24 @@ sub command_post_dle_backup {
     $self->remove_snapshot();
 }
 
+sub command_pre_dle_amcheck {
+    my $self = shift;
+
+    $self->setup();
+    $self->create_snapshot();
+    $self->mount_snapshot();
+
+    print "PROPERTY directory $self->{directory}\n";
+}
+
+sub command_post_dle_amcheck {
+    my $self = shift;
+
+    $self->setup();
+    $self->umount_snapshot();
+    $self->remove_snapshot();
+}
+
 package main;
 
 sub usage {

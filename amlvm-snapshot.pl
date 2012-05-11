@@ -249,7 +249,7 @@ sub resolve_device {
         sub { return $_[2] if ($_[1] eq $self->{disk}); }
     );
 
-    if (!defined $mnt_device) {
+    if (!$mnt_device) {
         if ($self->{disk} eq $self->{device}) {
             $self->print_to_server_and_die(
                 "Failed to resolve a device from directory `$self->{disk}'. ",

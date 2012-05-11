@@ -43,6 +43,15 @@ alternate mount point—of the snapshot device—that the script defines.
       index
     }
 
+To allow amanda to dump more than one lvm-snapshot in parallel,
+lvm-snapshot.conf has to have something like:
+
+      property "SNAPSHOT-SIZE" "250"
+
+(the unit is PEs, for LVM PE Size 4,00 MiB it results in 1G snapshot-size)
+
+otherwise the first snapshot uses up all extents and the second snapshot fails.
+
 Configure Permissions
 ---------------------
 
@@ -70,7 +79,7 @@ with `ENABLE_SUIDPERL`.
 For sudo, add the following to the `/etc/sudoers` file where "amandabackup" is
 the name of your Amanda user.
 
-    amandabackup    ALL=(ALL) NOPASSWD: /sbin/lvcreate, /sbin/lvdisplay, /sbin/lvremove, /sbin/vgdisplay, /bin/readlink
+    amandabackup    ALL=(ALL) NOPASSWD: /sbin/lvcreate, /sbin/lvdisplay, /sbin/lvremove, /sbin/vgdisplay, /bin/readlink, /bin/mount, /bin/umount
 
 The commands listed are those used by `amlvm-snapshot` to interact with the
 LVM volumes.

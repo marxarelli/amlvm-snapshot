@@ -25,7 +25,6 @@
 #    LVREMOVE-PATH
 #    VGDISPLAY-PATH
 #
-#    STABLE-MOUNTPOINT
 #    SUDO
 #
 use lib '/usr/local/share/perl/5.8.4';
@@ -52,7 +51,7 @@ sub new {
     my $class = shift;
     my ($execute_where, $config, $host, $disk, $device, $level, $index,
         $message, $collection, $record, $snapsize, $lvcreate, $lvdisplay,
-        $lvremove, $vgdisplay, $blkid, $stablemount, $sudo) = @_;
+        $lvremove, $vgdisplay, $blkid, $sudo) = @_;
     my $self = $class->SUPER::new($execute_where, $config);
 
     $self->{execute_where}  = $execute_where;
@@ -74,7 +73,6 @@ sub new {
     $self->{vgdisplay}      = $vgdisplay;
     $self->{blkid}          = $blkid;
 
-    $self->{stablemount}    = $stablemount;
     $self->{sudo}           = $sudo;
 
     $self->{volume_group}   = undef;
@@ -206,12 +204,13 @@ sub mount_snapshot {
     }
 
     # create a temporary mount point and mount the snapshot volume
-    if ($self->{stablemount}) {
-        $self->{directory} = File::Spec->tmpdir . "/" . md5_hex($self->{disk});
-        make_path($self->{directory});
-    } else {
-        $self->{directory} = tempdir(CLEANUP => 0);
-    }
+    #
+    # NOTE tempdir() is not used as it would create a completely random path
+    # and some archivers (e.g. star) rely on consistent paths for incremental
+    # backups
+    $self->{directory} = File::Spec->tmpdir . "/" . md5_hex($self->{disk});
+    make_path($self->{directory});
+
     my $snapshot_device = $self->get_snap_device(0);
     $self->execute(1,
         "mount -o ", join(",", @options),
@@ -463,7 +462,7 @@ package main;
 
 sub usage {
     print <<EOF;
-Usage: amlvm-snapshot <command> --execute-where=client --config=<config> --host=<host> --disk=<disk> --device=<device> --level=<level> --index=<yes|no> --message=<text> --collection=<no> --record=<yes|no> --snapshot-size=<lvm snapshot size> --lvcreate-path=<path> --lvdisplay-path=<path> --lvremove-path=<path> --vgdisplay-path=<path> --blkid-path=<path> --stable-mountpoint=<0|1> --sudo=<0|1>.
+Usage: amlvm-snapshot <command> --execute-where=client --config=<config> --host=<host> --disk=<disk> --device=<device> --level=<level> --index=<yes|no> --message=<text> --collection=<no> --record=<yes|no> --snapshot-size=<lvm snapshot size> --lvcreate-path=<path> --lvdisplay-path=<path> --lvremove-path=<path> --vgdisplay-path=<path> --blkid-path=<path> --sudo=<0|1>.
 EOF
     exit(1);
 }
@@ -485,7 +484,6 @@ my $opt_lvdisplay;
 my $opt_lvremove;
 my $opt_vgdisplay;
 my $opt_blkid;
-my $opt_stablemount;
 my $opt_sudo;
 
 Getopt::Long::Configure(qw{bundling});
@@ -506,7 +504,6 @@ GetOptions(
     'lvremove-path=s'   => \$opt_lvremove,
     'vgdisplay-path=s'  => \$opt_vgdisplay,
     'blkid=s'           => \$opt_blkid,
-    'stable-mountpoint=s' => \$opt_stablemount,
     'sudo=s'            => \$opt_sudo,
 ) or usage();
 
@@ -516,7 +513,7 @@ $ENV{'PATH'} = "/sbin:/usr/sbin:$ENV{'PATH'}:/usr/local/sbin";
 my $script = Amanda::Script::Amlvm_snapshot->new($opt_execute_where,
     $opt_config, $opt_host, $opt_disk, $opt_device, \@opt_level, $opt_index,
     $opt_message, $opt_collection, $opt_record, $opt_snapsize, $opt_lvcreate,
-    $opt_lvdisplay, $opt_lvremove, $opt_vgdisplay, $opt_blkid, $opt_stablemount, $opt_sudo);
+    $opt_lvdisplay, $opt_lvremove, $opt_vgdisplay, $opt_blkid, $opt_sudo);
 $script->do($ARGV[0]);
 
 # vim: set et sts=4 sw=4 :

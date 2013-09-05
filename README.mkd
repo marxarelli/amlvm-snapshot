@@ -12,7 +12,7 @@ Amanda's application directory.
 
 For example:
 
-    cp amlvm-snapshot /usr/libexec/amanda/application/amlvm-snapshot
+    install -m 755 -o root -g root amlvm-snapshot /usr/lib/amanda/application/amlvm-snapshot
 
 You may need to edit the location of Amanda's Perl libraries in the script
 itself, the following line.

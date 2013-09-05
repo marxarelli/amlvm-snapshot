@@ -122,11 +122,11 @@ sub create_snapshot {
     my $lv_name = $parts[3];
 
     # create a new snapshot with lvcreate
+    my $snapshot_device = $self->get_snap_device(0);
     $self->execute(1,
         "$self->{lvcreate}", "--extents", $self->{snapsize},
-        "--snapshot", "--name", "amsnap-$vg_name-$lv_name", "--persistent", "n", $self->{device}
+        "--snapshot", "--name", $snapshot_device, "--persistent", "n", $self->{device}
     );
-    my $snapshot_device = $self->get_snap_device(0);
 
     debug("Created snapshot of `$self->{device}' at `$snapshot_device'.");
 }
@@ -258,14 +258,9 @@ sub resolve_device {
     );
 
     if (!$mnt_device) {
-        if ($self->{disk} eq $self->{device}) {
-            $self->print_to_server_and_die(
-                "Failed to resolve a device from directory `$self->{disk}'. ",
-                $Amanda::Script_App::ERROR
-            );
-        } else {
-            $mnt_device = $self->{device};
-            $fs_type = join("", $self->execute(1, "$self->{blkid} -s TYPE -o value $self->{device}"));
+        $mnt_device = $self->{device};
+        $fs_type = join("", $self->execute(1, "$self->{blkid} -s TYPE -o value $self->{device}"));
+        if (defined $fs_type) {
             chomp($fs_type);
         }
     }
@@ -276,6 +271,19 @@ sub resolve_device {
 
         $device =~ s/^\s*//;
         chomp($device);
+
+        if ($device eq $mnt_device) {
+            $self->{device} = $device;
+            $self->{volume_group} = $group;
+            $self->{fs_type} = $fs_type;
+
+            debug(
+                "Resolved device `$self->{device}' and volume group ".
+                "`$self->{volume_group}' from mount point `$self->{disk}'."
+            );
+
+            last;
+        }
 
         my $real_device = $self->readlink($device);
         chomp($real_device);
@@ -292,6 +300,13 @@ sub resolve_device {
 
             last;
         }
+    }
+
+    if (!defined $self->{volume_group}) {
+        $self->print_to_server_and_die(
+            "Can't find a volume group for $mnt_device",
+            $Amanda::Script_App::ERROR
+        );
     }
 }
 

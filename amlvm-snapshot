@@ -77,6 +77,7 @@ sub new {
 
     $self->{volume_group}   = undef;
     $self->{fs_type}        = undef;
+    $self->{snap_device}    = undef;
 
     return $self;
 }
@@ -123,6 +124,7 @@ sub create_snapshot {
 
     # create a new snapshot with lvcreate
     my $snapshot_device = $self->get_snap_device(0);
+    $self->{snap_device} = $snapshot_device;
     $self->execute(1,
         "$self->{lvcreate}", "--extents", $self->{snapsize},
         "--snapshot", "--name", $snapshot_device, "--persistent", "n", $self->{device}
@@ -445,6 +447,7 @@ sub command_pre_dle_backup {
     $self->mount_snapshot();
 
     print "PROPERTY directory $self->{directory}\n";
+    print "PROPERTY device $self->{snap_device}\n";
 }
 
 sub command_post_dle_backup {
@@ -463,6 +466,7 @@ sub command_pre_dle_amcheck {
     $self->mount_snapshot();
 
     print "PROPERTY directory $self->{directory}\n";
+    print "PROPERTY device $self->{snap_device}\n";
 }
 
 sub command_post_dle_amcheck {

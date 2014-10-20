@@ -27,7 +27,7 @@
 #
 #    SUDO
 #
-use lib '/usr/local/share/perl/5.8.4';
+use lib '/usr/lib/amanda/perl/';
 use strict;
 use Getopt::Long;
 
@@ -51,7 +51,7 @@ sub new {
     my $class = shift;
     my ($execute_where, $config, $host, $disk, $device, $level, $index,
         $message, $collection, $record, $snapsize, $lvcreate, $lvdisplay,
-        $lvremove, $vgdisplay, $blkid, $sudo) = @_;
+        $lvremove, $vgdisplay, $blkid, $sudo, $sleep) = @_;
     my $self = $class->SUPER::new($execute_where, $config);
 
     $self->{execute_where}  = $execute_where;
@@ -75,8 +75,11 @@ sub new {
 
     $self->{sudo}           = $sudo;
 
+    $self->{sleep}          = $sleep;
+
     $self->{volume_group}   = undef;
     $self->{fs_type}        = undef;
+    $self->{snap_device}    = undef;
 
     return $self;
 }
@@ -122,11 +125,12 @@ sub create_snapshot {
     my $lv_name = $parts[3];
 
     # create a new snapshot with lvcreate
+    my $snapshot_device = $self->get_snap_device(0);
+    $self->{snap_device} = $snapshot_device;
     $self->execute(1,
         "$self->{lvcreate}", "--extents", $self->{snapsize},
-        "--snapshot", "--name", "amsnap-$vg_name-$lv_name", $self->{device}
+        "--snapshot", "--name", $snapshot_device, "--persistent", "n", $self->{device}
     );
-    my $snapshot_device = $self->get_snap_device(0);
 
     debug("Created snapshot of `$self->{device}' at `$snapshot_device'.");
 }
@@ -238,6 +242,10 @@ sub readlink {
 sub remove_snapshot {
     my $self = shift;
 
+    if (defined $self->{sleep}) {
+      sleep($self->{sleep});
+    }
+
     # remove snapshot device with 'lvremove'
     $self->execute(1, "$self->{lvremove} -f", $self->get_snap_device(0));
 
@@ -258,14 +266,9 @@ sub resolve_device {
     );
 
     if (!$mnt_device) {
-        if ($self->{disk} eq $self->{device}) {
-            $self->print_to_server_and_die(
-                "Failed to resolve a device from directory `$self->{disk}'. ",
-                $Amanda::Script_App::ERROR
-            );
-        } else {
-            $mnt_device = $self->{device};
-            $fs_type = join("", $self->execute(1, "$self->{blkid} -s TYPE -o value $self->{device}"));
+        $mnt_device = $self->{device};
+        $fs_type = join("", $self->execute(1, "$self->{blkid} -s TYPE -o value $self->{device}"));
+        if (defined $fs_type) {
             chomp($fs_type);
         }
     }
@@ -276,6 +279,19 @@ sub resolve_device {
 
         $device =~ s/^\s*//;
         chomp($device);
+
+        if ($device eq $mnt_device) {
+            $self->{device} = $device;
+            $self->{volume_group} = $group;
+            $self->{fs_type} = $fs_type;
+
+            debug(
+                "Resolved device `$self->{device}' and volume group ".
+                "`$self->{volume_group}' from mount point `$self->{disk}'."
+            );
+
+            last;
+        }
 
         my $real_device = $self->readlink($device);
         chomp($real_device);
@@ -292,6 +308,13 @@ sub resolve_device {
 
             last;
         }
+    }
+
+    if (!defined $self->{volume_group}) {
+        $self->print_to_server_and_die(
+            "Can't find a volume group for $mnt_device",
+            $Amanda::Script_App::ERROR
+        );
     }
 }
 
@@ -430,6 +453,7 @@ sub command_pre_dle_backup {
     $self->mount_snapshot();
 
     print "PROPERTY directory $self->{directory}\n";
+    print "PROPERTY device $self->{snap_device}\n";
 }
 
 sub command_post_dle_backup {
@@ -448,6 +472,7 @@ sub command_pre_dle_amcheck {
     $self->mount_snapshot();
 
     print "PROPERTY directory $self->{directory}\n";
+    print "PROPERTY device $self->{snap_device}\n";
 }
 
 sub command_post_dle_amcheck {
@@ -485,6 +510,7 @@ my $opt_lvremove;
 my $opt_vgdisplay;
 my $opt_blkid;
 my $opt_sudo;
+my $opt_sleep;
 
 Getopt::Long::Configure(qw{bundling});
 GetOptions(
@@ -505,6 +531,7 @@ GetOptions(
     'vgdisplay-path=s'  => \$opt_vgdisplay,
     'blkid=s'           => \$opt_blkid,
     'sudo=s'            => \$opt_sudo,
+    'sleep=i'           => \$opt_sleep,
 ) or usage();
 
 # add SBIN to PATH
@@ -513,7 +540,7 @@ $ENV{'PATH'} = "/sbin:/usr/sbin:$ENV{'PATH'}:/usr/local/sbin";
 my $script = Amanda::Script::Amlvm_snapshot->new($opt_execute_where,
     $opt_config, $opt_host, $opt_disk, $opt_device, \@opt_level, $opt_index,
     $opt_message, $opt_collection, $opt_record, $opt_snapsize, $opt_lvcreate,
-    $opt_lvdisplay, $opt_lvremove, $opt_vgdisplay, $opt_blkid, $opt_sudo);
+    $opt_lvdisplay, $opt_lvremove, $opt_vgdisplay, $opt_blkid, $opt_sudo, $opt_sleep);
 $script->do($ARGV[0]);
 
 # vim: set et sts=4 sw=4 :

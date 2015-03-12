@@ -483,6 +483,26 @@ sub command_post_dle_amcheck {
     $self->remove_snapshot();
 }
 
+sub command_pre_dle_estimate {
+    my $self = shift;
+
+    $self->setup();
+    $self->create_snapshot();
+    $self->mount_snapshot();
+
+    print "PROPERTY directory $self->{directory}\n";
+    print "PROPERTY device $self->{snap_device}\n";
+}
+
+sub command_post_dle_estimate {
+    my $self = shift;
+
+    $self->setup();
+    $self->umount_snapshot();
+    $self->remove_snapshot();
+}
+
+
 package main;
 
 sub usage {

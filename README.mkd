@@ -64,7 +64,7 @@ Dependecy is perl DBI with DBD-mysql driver (in debian is libdbd-mysql-perl, in 
 
 To use this feature add few property:
 	  
-	  property "DBMOUNT" "/var" # mount point (not direcotry) of mysql datadir
+	  property "DBMOUNT" "/dev/vg0/var" # device where is mysql datadir
 	  property "DBUSER" "amanda" # user with RELOAD privileges
 	  property "DBPASS" "secret" # password
 	  property "DBHOST" "localhost" # hostname (always needed)

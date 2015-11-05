@@ -456,7 +456,7 @@ sub command_pre_dle_backup {
     my $self = shift;
 
     $self->setup();
-    if($self->{disk} eq $self->{dbmount}) {
+    if($self->{device} eq $self->{dbmount}) {
 	use DBI;
     	my $dbh = DBI->connect("DBI:mysql:host=$self->{dbhost};port=$self->{dbport}", $self->{dbuser}, $self->{dbpass}) or die "Unable to connect: $DBI::errstr\n";
 	my $query = $dbh->prepare("FLUSH TABLES WITH READ LOCK");

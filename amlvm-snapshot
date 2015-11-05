@@ -51,7 +51,8 @@ sub new {
     my $class = shift;
     my ($execute_where, $config, $host, $disk, $device, $level, $index,
         $message, $collection, $record, $snapsize, $lvcreate, $lvdisplay,
-        $lvremove, $vgdisplay, $blkid, $sudo, $sleep) = @_;
+        $lvremove, $vgdisplay, $blkid, $sudo, $sleep,
+	$dbmount,$dbuser,$dbpass,$dbhost,$dbport) = @_;
     my $self = $class->SUPER::new($execute_where, $config);
 
     $self->{execute_where}  = $execute_where;
@@ -76,6 +77,12 @@ sub new {
     $self->{sudo}           = $sudo;
 
     $self->{sleep}          = $sleep;
+    
+    $self->{dbmount}        = $dbmount;
+    $self->{dbuser}         = $dbuser;
+    $self->{dbpass}         = $dbpass;
+    $self->{dbhost}         = $dbhost;
+    $self->{dbport}         = $dbport;
 
     $self->{volume_group}   = undef;
     $self->{fs_type}        = undef;
@@ -449,7 +456,20 @@ sub command_pre_dle_backup {
     my $self = shift;
 
     $self->setup();
-    $self->create_snapshot();
+    if($self->{disk} eq $self->{dbmount}) {
+	use DBI;
+    	my $dbh = DBI->connect("DBI:mysql:host=$self->{dbhost};port=$self->{dbport}", $self->{dbuser}, $self->{dbpass}) or die "Unable to connect: $DBI::errstr\n";
+	my $query = $dbh->prepare("FLUSH TABLES WITH READ LOCK");
+	$query->execute();
+	debug("FLUSH TABLES is executed and tables are in READ LOCK");
+    	$self->create_snapshot();
+	my $query = $dbh->prepare("UNLOCK TABLES");
+	$query->execute();
+	$dbh->disconnect();
+	debug("UNLOCK TABLES and disconnect from mysql");
+    } else {
+    	$self->create_snapshot();
+    }
     $self->mount_snapshot();
 
     print "PROPERTY directory $self->{directory}\n";
@@ -532,6 +552,12 @@ my $opt_blkid;
 my $opt_sudo;
 my $opt_sleep;
 
+my $opt_dbmount;
+my $opt_dbuser;
+my $opt_dbpass;
+my $opt_dbhost;
+my $opt_dbport;
+
 Getopt::Long::Configure(qw{bundling});
 GetOptions(
     'execute-where=s'   => \$opt_execute_where,
@@ -552,6 +578,11 @@ GetOptions(
     'blkid=s'           => \$opt_blkid,
     'sudo=s'            => \$opt_sudo,
     'sleep=i'           => \$opt_sleep,
+    'dbmount=s'         => \$opt_dbmount,
+    'dbuser=s'          => \$opt_dbuser,
+    'dbpass=s'          => \$opt_dbpass,
+    'dbhost=s'          => \$opt_dbhost,
+    'dbport=s'          => \$opt_dbport,
 ) or usage();
 
 # add SBIN to PATH
@@ -560,7 +591,8 @@ $ENV{'PATH'} = "/sbin:/usr/sbin:$ENV{'PATH'}:/usr/local/sbin";
 my $script = Amanda::Script::Amlvm_snapshot->new($opt_execute_where,
     $opt_config, $opt_host, $opt_disk, $opt_device, \@opt_level, $opt_index,
     $opt_message, $opt_collection, $opt_record, $opt_snapsize, $opt_lvcreate,
-    $opt_lvdisplay, $opt_lvremove, $opt_vgdisplay, $opt_blkid, $opt_sudo, $opt_sleep);
+    $opt_lvdisplay, $opt_lvremove, $opt_vgdisplay, $opt_blkid, $opt_sudo, $opt_sleep,
+    $opt_dbmount,$opt_dbuser,$opt_dbpass,$opt_dbhost,$opt_dbport);
 $script->do($ARGV[0]);
 
 # vim: set et sts=4 sw=4 :

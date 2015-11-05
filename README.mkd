@@ -1,4 +1,4 @@
-Amanda LVM-snapshot Plugin
+Amanda LVM-snapshot Plugin 
 ==========================
 
 This plugin provides support for LVM snapshots in Amanda dumps.  It interfaces
@@ -55,6 +55,23 @@ following configuration in `lvm-snapshot.conf`.
 
       property "SNAPSHOT-SIZE" "250"
 
+### MySQL FLUSH TABLES Feature
+
+This feature exec "FLUSH TABLES WITH READ LOCK" before snapshot.
+When snapshot is ready plugin will "UNLOCK TABLES" and close mysql connection.
+
+Dependecy is perl DBI with DBD-mysql driver (in debian is libdbd-mysql-perl, in gentoo is dev-perl/DBD-mysql)
+
+To use this feature add few property:
+	  
+	  property "DBMOUNT" "/var" # mount point (not direcotry) of mysql datadir
+	  property "DBUSER" "amanda" # user with RELOAD privileges
+	  property "DBPASS" "secret" # password
+	  property "DBHOST" "localhost" # hostname (always needed)
+          property "DBPORT" "3306" # port (always needed)
+
+Feature by [Piotr ViruS Sikora][2]
+
 Configure Permissions
 ---------------------
 
@@ -99,3 +116,4 @@ Enjoy,
 Daniel
 
 [1]: http://wiki.zmanda.com/index.php/Script_API
+[2]: https://github.com/svirusxxx/amlvm-snapshot
